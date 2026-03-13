@@ -4,3 +4,4 @@ fpdf2
 folium
 streamlit-folium
 airportsdata
+st-gsheets-connection
