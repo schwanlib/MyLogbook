@@ -1,0 +1,6 @@
+pandas
+streamlit
+fpdf2
+folium
+streamlit-folium
+airportsdata
