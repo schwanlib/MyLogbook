@@ -39,7 +39,11 @@ def generer_pdf_complet(df_vols, date_debut_log):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
 
-    hdv_total_all = df[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum().sum()
+    # RECTIFICATION : Le total HDV est la somme des temps machine uniquement
+    hdv_cols = ['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 
+                'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']
+    
+    hdv_total_all = df[hdv_cols].sum().sum()
     hdv_solo_all = df[['SEP Pilot', 'SEP Pilot Night', 'MEP Pilot', 'MEP Pilot Night']].sum().sum()
     hdv_ifr_total = df[['IFR Dual', 'IFR Pilote']].sum().sum()
     hdv_ifr_solo = df['IFR Pilote'].sum()
@@ -52,7 +56,7 @@ def generer_pdf_complet(df_vols, date_debut_log):
     att_3m = df[df['DateDT'] >= (auj - timedelta(days=90))][['Landing Day', 'Landing Night']].sum().sum()
     app_6m = df[df['DateDT'] >= (auj - timedelta(days=180))]['Approach'].sum()
     ifr_12m = df[df['DateDT'] >= (auj - timedelta(days=365))][['IFR Dual', 'IFR Pilote']].sum().sum()
-    total_12m = df[df['DateDT'] >= (auj - timedelta(days=365))][['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum().sum()
+    total_12m = df[df['DateDT'] >= (auj - timedelta(days=365))][hdv_cols].sum().sum()
 
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -68,19 +72,19 @@ def generer_pdf_complet(df_vols, date_debut_log):
         v = f"{val:.2f} {unit}" if unit == "h" else f"{int(val)} {unit}"
         pdf.cell(50, 9, v, border=1, ln=1, align="C")
 
-    write_bilan_row("HDV Total Dual+Solo Day+Night (SEP + MEP)", hdv_total_all)
-    write_bilan_row("HDV Solo Day+Night (SEP + MEP)", hdv_solo_all)
-    write_bilan_row("HDV IFR (IR) Total (MEP + SEP)", hdv_ifr_total)
-    write_bilan_row("HDV IFR Pilote Solo (MEP + SEP)", hdv_ifr_solo)
-    write_bilan_row("HDV Night Total Dual+Solo (MEP + SEP)", hdv_night_total)
-    write_bilan_row("HDV Night Solo (MEP + SEP)", hdv_night_solo)
-    write_bilan_row("HDV MEP Total Day+Night (Dual + Solo)", hdv_mep_total)
-    write_bilan_row("HDV MEP Solo Day+Night", hdv_mep_solo)
+    write_bilan_row("HDV Total (Dual+Solo / Day+Night / SEP+MEP)", hdv_total_all)
+    write_bilan_row("HDV Solo (Day+Night / SEP+MEP)", hdv_solo_all)
+    write_bilan_row("HDV IFR (IR) Total", hdv_ifr_total)
+    write_bilan_row("HDV IFR Pilote Solo", hdv_ifr_solo)
+    write_bilan_row("HDV Night Total (Dual+Solo)", hdv_night_total)
+    write_bilan_row("HDV Night Solo", hdv_night_solo)
+    write_bilan_row("HDV MEP Total (Day+Night)", hdv_mep_total)
+    write_bilan_row("HDV MEP Solo (Day+Night)", hdv_mep_solo)
     pdf.ln(10)
     write_bilan_row("Nb atterrissages Day+Night (3 derniers mois)", att_3m, "att.")
     write_bilan_row("Nb approches IFR (6 derniers mois)", app_6m, "appr.")
-    write_bilan_row("HDV IFR (IR) Dual+Solo (12 derniers mois)", ifr_12m)
-    write_bilan_row("HDV Total Dual+Solo (12 derniers mois)", total_12m)
+    write_bilan_row("HDV IFR (IR) (12 derniers mois)", ifr_12m)
+    write_bilan_row("HDV Total (12 derniers mois)", total_12m)
 
     pdf.add_page()
     pdf.set_font("helvetica", "B", 14)
@@ -167,17 +171,16 @@ with t3:
     })
     
     res = pd.DataFrame(index=stats_avion.index)
-    res['HDV (Dual+Solo)'] = stats_avion.sum(axis=1) - stats_avion['Approach']
+    # RECTIFICATION ICI : Total HDV = Somme Dual+Pilot Day+Night
+    res['HDV Total'] = stats_avion[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
     res['Solo (Day+Night)'] = stats_avion[['SEP Pilot', 'SEP Pilot Night', 'MEP Pilot', 'MEP Pilot Night']].sum(axis=1)
     res['Day (Dual+Solo)'] = stats_avion[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
     res['Night (Dual+Solo)'] = stats_avion[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
     res['IR (IFR Dual+Solo)'] = stats_avion[['IFR Dual', 'IFR Pilote']].sum(axis=1)
     res['Nb Approach'] = stats_avion['Approach'].astype(int)
     
-    # --- AMÉLIORATION : TRI DÉCROISSANT ---
-    res = res.sort_values(by='HDV (Dual+Solo)', ascending=False)
-    
-    st.table(res.style.format("{:.2f}", subset=['HDV (Dual+Solo)', 'Solo (Day+Night)', 'Day (Dual+Solo)', 'Night (Dual+Solo)', 'IR (IFR Dual+Solo)']))
+    res = res.sort_values(by='HDV Total', ascending=False)
+    st.table(res.style.format("{:.2f}", subset=['HDV Total', 'Solo (Day+Night)', 'Day (Dual+Solo)', 'Night (Dual+Solo)', 'IR (IFR Dual+Solo)']))
 
 with t4:
     st.header("Évolution Annuelle des Heures de Vol")
@@ -195,7 +198,7 @@ with t4:
     })
     
     chart_data = pd.DataFrame(index=annee_stats.index)
-    chart_data['Total (Solo+Dual)'] = annee_stats.sum(axis=1)
+    chart_data['Total (Dual+Solo)'] = annee_stats.sum(axis=1)
     chart_data['Day (SEP+MEP)'] = annee_stats[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
     chart_data['Night (SEP+MEP)'] = annee_stats[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
     
