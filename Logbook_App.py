@@ -39,7 +39,6 @@ def generer_pdf_complet(df_vols, date_debut_log):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
 
-    # CALCULS DU RÉSUMÉ
     hdv_total_all = df[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum().sum()
     hdv_solo_all = df[['SEP Pilot', 'SEP Pilot Night', 'MEP Pilot', 'MEP Pilot Night']].sum().sum()
     hdv_ifr_total = df[['IFR Dual', 'IFR Pilote']].sum().sum()
@@ -58,7 +57,6 @@ def generer_pdf_complet(df_vols, date_debut_log):
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # PAGE 1 : RÉSUMÉ
     pdf.set_font("helvetica", "B", 18)
     pdf.cell(0, 12, "BILAN D'EXPÉRIENCE PILOTE - RÉSUMÉ TOTAL", border='B', ln=1, align="C")
     pdf.ln(8)
@@ -84,7 +82,6 @@ def generer_pdf_complet(df_vols, date_debut_log):
     write_bilan_row("HDV IFR (IR) Dual+Solo (12 derniers mois)", ifr_12m)
     write_bilan_row("HDV Total Dual+Solo (12 derniers mois)", total_12m)
 
-    # PAGE 2+ : LOGBOOK DÉTAILLÉ
     pdf.add_page()
     pdf.set_font("helvetica", "B", 14)
     pdf.cell(0, 10, f"JOURNAL DE BORD DÉTAILLÉ (Depuis le {date_debut_log.strftime('%d/%m/%Y')})", ln=1)
@@ -121,7 +118,6 @@ def generer_pdf_complet(df_vols, date_debut_log):
 st.title("✈️ Pilot Logbook Christophe")
 df_vols = charger_donnees()
 
-# Ajout de l'onglet 📈 Graphiques
 t1, t2, t3, t4, t5, t6 = st.tabs(["📝 Saisie", "📊 Historique", "🛩️ Avions", "📈 Graphiques", "🖨️ Rapport PDF", "🗺️ Carte"])
 
 with t1:
@@ -157,7 +153,7 @@ with t2:
     st.dataframe(df_vols, use_container_width=True)
 
 with t3:
-    st.header("Analyse par Type d'avion")
+    st.header("Analyse par Type d'avion (Classé par HDV)")
     df_stats = df_vols.copy()
     num_cols = ['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night', 'IFR Dual', 'IFR Pilote', 'Approach']
     for col in num_cols:
@@ -177,36 +173,33 @@ with t3:
     res['Night (Dual+Solo)'] = stats_avion[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
     res['IR (IFR Dual+Solo)'] = stats_avion[['IFR Dual', 'IFR Pilote']].sum(axis=1)
     res['Nb Approach'] = stats_avion['Approach'].astype(int)
+    
+    # --- AMÉLIORATION : TRI DÉCROISSANT ---
+    res = res.sort_values(by='HDV (Dual+Solo)', ascending=False)
+    
     st.table(res.style.format("{:.2f}", subset=['HDV (Dual+Solo)', 'Solo (Day+Night)', 'Day (Dual+Solo)', 'Night (Dual+Solo)', 'IR (IFR Dual+Solo)']))
 
 with t4:
     st.header("Évolution Annuelle des Heures de Vol")
-    
-    # Préparation des données pour le graphique
     df_graph = df_vols.copy()
     df_graph['DateDT'] = pd.to_datetime(df_graph['Date'], dayfirst=True, errors='coerce')
     df_graph['Year'] = df_graph['DateDT'].dt.year.fillna(0).astype(int)
-    df_graph = df_graph[df_graph['Year'] > 0] # On retire les erreurs de date
+    df_graph = df_graph[df_graph['Year'] > 0]
     
     for c in num_cols:
         df_graph[c] = pd.to_numeric(df_graph[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # Agrégation par année
     annee_stats = df_graph.groupby('Year').agg({
         'SEP Dual': 'sum', 'SEP Pilot': 'sum', 'SEP Dual Night': 'sum', 'SEP Pilot Night': 'sum',
         'MEP Dual': 'sum', 'MEP Pilot': 'sum', 'MEP Dual Night': 'sum', 'MEP Pilot Night': 'sum'
     })
     
-    # Calcul des colonnes demandées
     chart_data = pd.DataFrame(index=annee_stats.index)
     chart_data['Total (Solo+Dual)'] = annee_stats.sum(axis=1)
     chart_data['Day (SEP+MEP)'] = annee_stats[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
     chart_data['Night (SEP+MEP)'] = annee_stats[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
     
-    # Affichage du graphique
     st.bar_chart(chart_data)
-    
-    # Petit tableau récapitulatif sous le graphique
     st.write("### Détail des heures par année")
     st.dataframe(chart_data.T, use_container_width=True)
 
