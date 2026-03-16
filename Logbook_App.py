@@ -185,35 +185,46 @@ with t3:
 with t4:
     st.header("Évolution Annuelle des Heures de Vol")
     
-    # Préparation des données pour le graphique
+    # 1. Préparation et nettoyage des données
     df_graph = df_vols.copy()
     df_graph['DateDT'] = pd.to_datetime(df_graph['Date'], dayfirst=True, errors='coerce')
     df_graph['Year'] = df_graph['DateDT'].dt.year.fillna(0).astype(int)
-    df_graph = df_graph[df_graph['Year'] > 0] # On retire les erreurs de date
+    df_graph = df_graph[df_graph['Year'] > 0] 
     
-    for c in num_cols:
-        df_graph[c] = pd.to_numeric(df_graph[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
+    # Conversion numérique des colonnes essentielles
+    cols_to_convert = num_cols + ['IFR Dual', 'IFR Pilote']
+    for c in cols_to_convert:
+        if c in df_graph.columns:
+            df_graph[c] = pd.to_numeric(df_graph[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # Agrégation par année (Ajout de IFR Dual et IFR Pilote ici)
+    # 2. Agrégation par année
     annee_stats = df_graph.groupby('Year').agg({
-        'SEP Dual': 'sum', 'SEP Pilot': 'sum', 'SEP Dual Night': 'sum', 'SEP Pilot Night': 'sum',
-        'MEP Dual': 'sum', 'MEP Pilot': 'sum', 'MEP Dual Night': 'sum', 'MEP Pilot Night': 'sum',
-        'IFR Dual': 'sum', 'IFR Pilote': 'sum'  # <-- Ajouté pour le calcul IFR
+        'SEP Dual': 'sum', 'SEP Pilot': 'sum', 
+        'SEP Dual Night': 'sum', 'SEP Pilot Night': 'sum',
+        'MEP Dual': 'sum', 'MEP Pilot': 'sum', 
+        'MEP Dual Night': 'sum', 'MEP Pilot Night': 'sum',
+        'IFR Dual': 'sum', 'IFR Pilote': 'sum'
     })
     
-    # Calcul des colonnes demandées
+    # 3. Création du DataFrame pour le graphique (Colonnes = Séries parallèles)
     chart_data = pd.DataFrame(index=annee_stats.index)
+    
+    # Total général (SEP + MEP)
     chart_data['Total (Solo+Dual)'] = annee_stats[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
+    
+    # Vols de Jour
     chart_data['Day (SEP+MEP)'] = annee_stats[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
+    
+    # Vols de Nuit
     chart_data['Night (SEP+MEP)'] = annee_stats[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
     
-    # Nouvelle colonne demandée : Vol IFR (Dual + Pilote)
+    # Vols IFR (IR) - Affichée en parallèle
     chart_data['Vol IFR (IR)'] = annee_stats[['IFR Dual', 'IFR Pilote']].sum(axis=1)
     
-    # Affichage du graphique
+    # 4. Affichage du graphique en barres groupées
     st.bar_chart(chart_data)
     
-    # Petit tableau récapitulatif sous le graphique
+    # 5. Tableau récapitulatif
     st.write("### Détail des heures par année")
     st.dataframe(chart_data.T, use_container_width=True)
 
