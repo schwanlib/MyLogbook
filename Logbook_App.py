@@ -182,50 +182,59 @@ with t3:
     res = res.sort_values(by='HDV Total', ascending=False)
     st.table(res.style.format("{:.2f}", subset=['HDV Total', 'Solo (Day+Night)', 'Day (Dual+Solo)', 'Night (Dual+Solo)', 'IR (IFR Dual+Solo)']))
 
+import plotly.graph_objects as go
+
 with t4:
     st.header("Évolution Annuelle des Heures de Vol")
     
-    # 1. Préparation et nettoyage des données
+    # 1. Préparation des données (Identique)
     df_graph = df_vols.copy()
     df_graph['DateDT'] = pd.to_datetime(df_graph['Date'], dayfirst=True, errors='coerce')
     df_graph['Year'] = df_graph['DateDT'].dt.year.fillna(0).astype(int)
-    df_graph = df_graph[df_graph['Year'] > 0] 
+    df_graph = df_graph[df_graph['Year'] > 0]
     
-    # Conversion numérique des colonnes essentielles
-    cols_to_convert = num_cols + ['IFR Dual', 'IFR Pilote']
-    for c in cols_to_convert:
-        if c in df_graph.columns:
-            df_graph[c] = pd.to_numeric(df_graph[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
+    for c in num_cols + ['IFR Dual', 'IFR Pilote']:
+        df_graph[c] = pd.to_numeric(df_graph[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # 2. Agrégation par année
+    # 2. Agrégation
     annee_stats = df_graph.groupby('Year').agg({
-        'SEP Dual': 'sum', 'SEP Pilot': 'sum', 
-        'SEP Dual Night': 'sum', 'SEP Pilot Night': 'sum',
-        'MEP Dual': 'sum', 'MEP Pilot': 'sum', 
-        'MEP Dual Night': 'sum', 'MEP Pilot Night': 'sum',
+        'SEP Dual': 'sum', 'SEP Pilot': 'sum', 'SEP Dual Night': 'sum', 'SEP Pilot Night': 'sum',
+        'MEP Dual': 'sum', 'MEP Pilot': 'sum', 'MEP Dual Night': 'sum', 'MEP Pilot Night': 'sum',
         'IFR Dual': 'sum', 'IFR Pilote': 'sum'
     })
     
-    # 3. Création du DataFrame pour le graphique (Colonnes = Séries parallèles)
-    chart_data = pd.DataFrame(index=annee_stats.index)
-    
-    # Total général (SEP + MEP)
-    chart_data['Total (Solo+Dual)'] = annee_stats[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
-    
-    # Vols de Jour
-    chart_data['Day (SEP+MEP)'] = annee_stats[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
-    
-    # Vols de Nuit
-    chart_data['Night (SEP+MEP)'] = annee_stats[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
-    
-    # Vols IFR (IR) - Affichée en parallèle
-    chart_data['Vol IFR (IR)'] = annee_stats[['IFR Dual', 'IFR Pilote']].sum(axis=1)
-    
-    # 4. Affichage du graphique en barres groupées
-    st.bar_chart(chart_data)
+    # 3. Calcul des catégories
+    years = annee_stats.index.tolist()
+    total_hrs = annee_stats[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
+    day_hrs = annee_stats[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
+    night_hrs = annee_stats[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
+    ifr_hrs = annee_stats[['IFR Dual', 'IFR Pilote']].sum(axis=1)
+
+    # 4. Création du graphique avec Plotly pour forcer le mode "Grouped"
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=years, y=total_hrs, name='Total (SEP+MEP)', marker_color='blue'))
+    fig.add_trace(go.Bar(x=years, y=day_hrs, name='Day', marker_color='orange'))
+    fig.add_trace(go.Bar(x=years, y=night_hrs, name='Night', marker_color='black'))
+    fig.add_trace(go.Bar(x=years, y=ifr_hrs, name='Vol IFR (IR)', marker_color='red'))
+
+    fig.update_layout(
+        barmode='group', # C'est cette option qui force l'affichage "côte à côte"
+        xaxis_title="Année",
+        yaxis_title="Heures de vol",
+        legend_title="Catégories",
+        hovermode="x unified"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
     
     # 5. Tableau récapitulatif
     st.write("### Détail des heures par année")
+    chart_data = pd.DataFrame({
+        'Total (Solo+Dual)': total_hrs,
+        'Day (SEP+MEP)': day_hrs,
+        'Night (SEP+MEP)': night_hrs,
+        'Vol IFR (IR)': ifr_hrs
+    }, index=years)
     st.dataframe(chart_data.T, use_container_width=True)
 
 with t5:
