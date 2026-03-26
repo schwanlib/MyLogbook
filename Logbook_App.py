@@ -39,11 +39,8 @@ def generer_pdf_complet(df_vols, date_debut_log):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
 
-    # RECTIFICATION : Le total HDV est la somme des temps machine uniquement
-    hdv_cols = ['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 
-                'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']
-    
-    hdv_total_all = df[hdv_cols].sum().sum()
+    # CALCULS DU RÉSUMÉ
+    hdv_total_all = df[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum().sum()
     hdv_solo_all = df[['SEP Pilot', 'SEP Pilot Night', 'MEP Pilot', 'MEP Pilot Night']].sum().sum()
     hdv_ifr_total = df[['IFR Dual', 'IFR Pilote']].sum().sum()
     hdv_ifr_solo = df['IFR Pilote'].sum()
@@ -56,11 +53,12 @@ def generer_pdf_complet(df_vols, date_debut_log):
     att_3m = df[df['DateDT'] >= (auj - timedelta(days=90))][['Landing Day', 'Landing Night']].sum().sum()
     app_6m = df[df['DateDT'] >= (auj - timedelta(days=180))]['Approach'].sum()
     ifr_12m = df[df['DateDT'] >= (auj - timedelta(days=365))][['IFR Dual', 'IFR Pilote']].sum().sum()
-    total_12m = df[df['DateDT'] >= (auj - timedelta(days=365))][hdv_cols].sum().sum()
+    total_12m = df[df['DateDT'] >= (auj - timedelta(days=365))][['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum().sum()
 
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
+    # PAGE 1 : RÉSUMÉ
     pdf.set_font("helvetica", "B", 18)
     pdf.cell(0, 12, "BILAN D'EXPÉRIENCE PILOTE - RÉSUMÉ TOTAL", border='B', ln=1, align="C")
     pdf.ln(8)
@@ -72,20 +70,21 @@ def generer_pdf_complet(df_vols, date_debut_log):
         v = f"{val:.2f} {unit}" if unit == "h" else f"{int(val)} {unit}"
         pdf.cell(50, 9, v, border=1, ln=1, align="C")
 
-    write_bilan_row("HDV Total (Dual+Solo / Day+Night / SEP+MEP)", hdv_total_all)
-    write_bilan_row("HDV Solo (Day+Night / SEP+MEP)", hdv_solo_all)
-    write_bilan_row("HDV IFR (IR) Total", hdv_ifr_total)
-    write_bilan_row("HDV IFR Pilote Solo", hdv_ifr_solo)
-    write_bilan_row("HDV Night Total (Dual+Solo)", hdv_night_total)
-    write_bilan_row("HDV Night Solo", hdv_night_solo)
-    write_bilan_row("HDV MEP Total (Day+Night)", hdv_mep_total)
-    write_bilan_row("HDV MEP Solo (Day+Night)", hdv_mep_solo)
+    write_bilan_row("HDV Total Dual+Solo Day+Night (SEP + MEP)", hdv_total_all)
+    write_bilan_row("HDV Solo Day+Night (SEP + MEP)", hdv_solo_all)
+    write_bilan_row("HDV IFR (IR) Total (MEP + SEP)", hdv_ifr_total)
+    write_bilan_row("HDV IFR Pilote Solo (MEP + SEP)", hdv_ifr_solo)
+    write_bilan_row("HDV Night Total Dual+Solo (MEP + SEP)", hdv_night_total)
+    write_bilan_row("HDV Night Solo (MEP + SEP)", hdv_night_solo)
+    write_bilan_row("HDV MEP Total Day+Night (Dual + Solo)", hdv_mep_total)
+    write_bilan_row("HDV MEP Solo Day+Night", hdv_mep_solo)
     pdf.ln(10)
     write_bilan_row("Nb atterrissages Day+Night (3 derniers mois)", att_3m, "att.")
     write_bilan_row("Nb approches IFR (6 derniers mois)", app_6m, "appr.")
-    write_bilan_row("HDV IFR (IR) (12 derniers mois)", ifr_12m)
-    write_bilan_row("HDV Total (12 derniers mois)", total_12m)
+    write_bilan_row("HDV IFR (IR) Dual+Solo (12 derniers mois)", ifr_12m)
+    write_bilan_row("HDV Total Dual+Solo (12 derniers mois)", total_12m)
 
+    # PAGE 2+ : LOGBOOK DÉTAILLÉ
     pdf.add_page()
     pdf.set_font("helvetica", "B", 14)
     pdf.cell(0, 10, f"JOURNAL DE BORD DÉTAILLÉ (Depuis le {date_debut_log.strftime('%d/%m/%Y')})", ln=1)
@@ -122,42 +121,45 @@ def generer_pdf_complet(df_vols, date_debut_log):
 st.title("✈️ Pilot Logbook Christophe")
 df_vols = charger_donnees()
 
-t1, t2, t3, t4, t5, t6 = st.tabs(["📝 Saisie", "📊 Historique", "🛩️ Avions", "📈 Graphiques", "🖨️ Rapport PDF", "🗺️ Carte"])
+# On ne garde que les onglets de consultation et d'analyse
+t1, t2, t3, t4, t5 = st.tabs(["📊 Historique", "🛩️ Avions", "📈 Graphiques", "🖨️ Rapport PDF", "🗺️ Carte"])
+
 
 with t1:
-    with st.form("form_v"):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            d = st.date_input("Date")
-            ty, re = st.text_input("Type"), st.text_input("Registration")
-        with c2:
-            fr, to = st.text_input("From"), st.text_input("To")
-            s_d, s_p = st.number_input("SEP Dual", 0.0), st.number_input("SEP Pilot", 0.0)
-            sn_d, sn_p = st.number_input("SEP Dual Night", 0.0), st.number_input("SEP Pilot Night", 0.0)
-        with c3:
-            ir_d, ir_p = st.number_input("IFR Dual", 0.0), st.number_input("IFR Pilote", 0.0)
-            m_p, m_pn = st.number_input("MEP Pilot", 0.0), st.number_input("MEP Pilot Night", 0.0)
-            ap, ld = st.number_input("Approach", 0), st.number_input("Landing Day", 0)
-        
-        if st.form_submit_button("Enregistrer le vol"):
-            nouveau = pd.DataFrame([{
-                "Date": d.strftime('%d/%m/%Y'), "Type": ty, "Registration": re, 
-                "From": fr, "To": to, "SEP Dual": s_d, "SEP Pilot": s_p, 
-                "SEP Dual Night": sn_d, "SEP Pilot Night": sn_p, "MEP Pilot": m_p,
-                "MEP Pilot Night": m_pn, "IFR Dual": ir_d, "IFR Pilote": ir_p,
-                "Approach": ap, "Landing Day": ld
-            }])
-            df_maj = pd.concat([df_vols, nouveau], ignore_index=True)
-            conn.update(spreadsheet=GSHEET_WRITE_URL, worksheet="vols", data=df_maj)
-            st.cache_data.clear()
-            st.success("Vol enregistré !")
-            st.rerun()
+    st.header("Historique des vols")
+    
+    # 1) Demande la date à partir de laquelle afficher les vols
+    date_filtre = st.date_input(
+        "Afficher les vols à partir du :", 
+        value=datetime(2024, 1, 1),
+        key="filtre_historique"
+    )
+    
+    # Préparation des données
+    df_histo = df_vols.copy()
+    df_histo['DateDT'] = pd.to_datetime(df_histo['Date'], dayfirst=True, errors='coerce')
+    
+    # Filtrage par date
+    df_filtre = df_histo[df_histo['DateDT'] >= pd.to_datetime(date_filtre)].sort_values('DateDT', ascending=False)
+    
+    # 2) Suppression de 'Flight Number' et ajustement de l'affichage
+    # On définit ici les colonnes que l'on souhaite masquer
+    colonnes_a_exclure = ['Flight Number', 'DateDT']
+    colonnes_visibles = [c for c in df_filtre.columns if c not in colonnes_a_exclure]
+    
+    # Affichage avec mise en forme (Styler) pour la taille des caractères
+    # On utilise .set_table_styles pour injecter du CSS spécifique au dataframe
+    st.dataframe(
+        df_filtre[colonnes_visibles].style.set_properties(**{
+            'font-size': '11px',
+            'white-space': 'normal'  # Permet au texte des 'Remarks' de revenir à la ligne
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
 
 with t2:
-    st.dataframe(df_vols, use_container_width=True)
-
-with t3:
-    st.header("Analyse par Type d'avion (Classé par HDV)")
+    st.header("Analyse par Type d'avion")
     df_stats = df_vols.copy()
     num_cols = ['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night', 'IFR Dual', 'IFR Pilote', 'Approach']
     for col in num_cols:
@@ -171,80 +173,53 @@ with t3:
     })
     
     res = pd.DataFrame(index=stats_avion.index)
-    # RECTIFICATION ICI : Total HDV = Somme Dual+Pilot Day+Night
-    res['HDV Total'] = stats_avion[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
+    res['HDV (Dual+Solo)'] = stats_avion.sum(axis=1) - stats_avion['Approach']
     res['Solo (Day+Night)'] = stats_avion[['SEP Pilot', 'SEP Pilot Night', 'MEP Pilot', 'MEP Pilot Night']].sum(axis=1)
     res['Day (Dual+Solo)'] = stats_avion[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
     res['Night (Dual+Solo)'] = stats_avion[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
     res['IR (IFR Dual+Solo)'] = stats_avion[['IFR Dual', 'IFR Pilote']].sum(axis=1)
     res['Nb Approach'] = stats_avion['Approach'].astype(int)
-    
-    res = res.sort_values(by='HDV Total', ascending=False)
-    st.table(res.style.format("{:.2f}", subset=['HDV Total', 'Solo (Day+Night)', 'Day (Dual+Solo)', 'Night (Dual+Solo)', 'IR (IFR Dual+Solo)']))
+    st.table(res.style.format("{:.2f}", subset=['HDV (Dual+Solo)', 'Solo (Day+Night)', 'Day (Dual+Solo)', 'Night (Dual+Solo)', 'IR (IFR Dual+Solo)']))
 
-import plotly.graph_objects as go
-
-with t4:
+with t3:
     st.header("Évolution Annuelle des Heures de Vol")
     
-    # 1. Préparation des données (Identique)
+    # Préparation des données pour le graphique
     df_graph = df_vols.copy()
     df_graph['DateDT'] = pd.to_datetime(df_graph['Date'], dayfirst=True, errors='coerce')
     df_graph['Year'] = df_graph['DateDT'].dt.year.fillna(0).astype(int)
-    df_graph = df_graph[df_graph['Year'] > 0]
+    df_graph = df_graph[df_graph['Year'] > 0] # On retire les erreurs de date
     
-    for c in num_cols + ['IFR Dual', 'IFR Pilote']:
+    for c in num_cols:
         df_graph[c] = pd.to_numeric(df_graph[c].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
-    # 2. Agrégation
+    # Agrégation par année
     annee_stats = df_graph.groupby('Year').agg({
         'SEP Dual': 'sum', 'SEP Pilot': 'sum', 'SEP Dual Night': 'sum', 'SEP Pilot Night': 'sum',
-        'MEP Dual': 'sum', 'MEP Pilot': 'sum', 'MEP Dual Night': 'sum', 'MEP Pilot Night': 'sum',
-        'IFR Dual': 'sum', 'IFR Pilote': 'sum'
+        'MEP Dual': 'sum', 'MEP Pilot': 'sum', 'MEP Dual Night': 'sum', 'MEP Pilot Night': 'sum'
     })
     
-    # 3. Calcul des catégories
-    years = annee_stats.index.tolist()
-    total_hrs = annee_stats[['SEP Dual', 'SEP Pilot', 'SEP Dual Night', 'SEP Pilot Night', 'MEP Dual', 'MEP Pilot', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
-    day_hrs = annee_stats[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
-    night_hrs = annee_stats[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
-    ifr_hrs = annee_stats[['IFR Dual', 'IFR Pilote']].sum(axis=1)
-
-    # 4. Création du graphique avec Plotly pour forcer le mode "Grouped"
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=years, y=total_hrs, name='Total (SEP+MEP)', marker_color='blue'))
-    fig.add_trace(go.Bar(x=years, y=day_hrs, name='Day', marker_color='orange'))
-    fig.add_trace(go.Bar(x=years, y=night_hrs, name='Night', marker_color='black'))
-    fig.add_trace(go.Bar(x=years, y=ifr_hrs, name='Vol IFR (IR)', marker_color='red'))
-
-    fig.update_layout(
-        barmode='group', # C'est cette option qui force l'affichage "côte à côte"
-        xaxis_title="Année",
-        yaxis_title="Heures de vol",
-        legend_title="Catégories",
-        hovermode="x unified"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
+    # Calcul des colonnes demandées
+    chart_data = pd.DataFrame(index=annee_stats.index)
+    chart_data['Total (Solo+Dual)'] = annee_stats.sum(axis=1)
+    chart_data['Day (SEP+MEP)'] = annee_stats[['SEP Dual', 'SEP Pilot', 'MEP Dual', 'MEP Pilot']].sum(axis=1)
+    chart_data['Night (SEP+MEP)'] = annee_stats[['SEP Dual Night', 'SEP Pilot Night', 'MEP Dual Night', 'MEP Pilot Night']].sum(axis=1)
     
-    # 5. Tableau récapitulatif
+    # Affichage du graphique
+    st.bar_chart(chart_data)
+    
+    # Petit tableau récapitulatif sous le graphique
     st.write("### Détail des heures par année")
-    chart_data = pd.DataFrame({
-        'Total (Solo+Dual)': total_hrs,
-        'Day (SEP+MEP)': day_hrs,
-        'Night (SEP+MEP)': night_hrs,
-        'Vol IFR (IR)': ifr_hrs
-    }, index=years)
     st.dataframe(chart_data.T, use_container_width=True)
 
-with t5:
+with t4:
     st.header("Génération du document officiel")
     date_extr = st.date_input("Détails des vols à partir du :", datetime(2024, 1, 1))
     if st.button("📊 Créer le PDF Complet"):
         pdf_bytes = generer_pdf_complet(df_vols, date_extr)
         st.download_button("📥 Télécharger le PDF", pdf_bytes, "Logbook_Bilan.pdf")
 
-with t6:
+with t5:
     airports = charger_base_aeroports()
     m = folium.Map(location=[46, 2], zoom_start=5)
     for _, r in df_vols.dropna(subset=['From', 'To']).iterrows():
